@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f6f7fb">
   <title>Smart Task Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -42,8 +45,8 @@
         <header class="topbar">
           <button id="menu-button" class="icon-button menu-button" type="button" aria-label="Открыть меню">☰</button>
           <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Поиск задач…" aria-label="Поиск задач"></div>
-          <button id="new-project-button" class="button secondary" type="button">Новый проект</button>
-          <button id="new-task-button" class="button primary" type="button">＋ Новая задача</button>
+          <button id="new-project-button" class="button floral-button" type="button">Новый проект</button>
+          <button id="new-task-button" class="button floral-button emphasized" type="button">＋ Новая задача</button>
         </header>
 
         <div class="page-content">
@@ -52,7 +55,7 @@
               <p class="eyebrow">Ваше пространство</p>
               <h1 id="greeting">Здравствуйте!</h1>
               <p id="welcome-summary">Загружаем ваши планы…</p>
-              <button id="welcome-new-task" class="button primary" type="button">＋ Создать задачу</button>
+              <button id="welcome-new-task" class="button floral-button emphasized" type="button">＋ Создать задачу</button>
             </div>
           </section>
 
