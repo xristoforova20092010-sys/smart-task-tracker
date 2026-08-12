@@ -38,6 +38,7 @@ function setError(element, message = "") { element.textContent = message; elemen
 function setDataMessage(message = "", error = false) { dataMessage.textContent = message; dataMessage.hidden = !message; dataMessage.classList.toggle("error", error); }
 function projectById(id) { return projects.find((project) => project.id === id); }
 function normalizeStatus(status, completed) { if (completed || ["done", "completed"].includes(status)) return "completed"; if (["in-progress", "in_progress"].includes(status)) return "in-progress"; return "todo"; }
+function cleanTaskTitle(title) { return String(title || "Без названия").replace(/\s*(?:[—–-]\s*)?\(?копия(?:\s*\d+)?\)?\s*$/iu, "").trim() || "Без названия"; }
 
 function dateFromValue(value) {
   if (!value) return null;
@@ -147,7 +148,7 @@ function renderTasks() {
     const row = document.createElement("article"); row.className = `task-row${status === "completed" ? " done" : ""}`;
     const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.className = "task-check"; checkbox.checked = status === "completed"; checkbox.ariaLabel = `Отметить задачу «${task.title || "Без названия"}» выполненной`;
     checkbox.addEventListener("change", () => toggleTask(task, checkbox.checked));
-    const copy = document.createElement("div"); const title = document.createElement("h3"); title.className = "task-title"; title.textContent = task.title || "Без названия";
+    const copy = document.createElement("div"); const title = document.createElement("h3"); title.className = "task-title"; title.textContent = cleanTaskTitle(task.title);
     const description = document.createElement("p"); description.className = "task-description"; description.textContent = task.description || "Описание не добавлено"; copy.append(title, description);
     const project = projectById(task.projectId); const projectPill = createPill(project?.name || "Без проекта", "project-pill"); if (project?.color) projectPill.style.borderLeft = `3px solid ${project.color}`;
     const priority = task.priority || "medium"; const priorityPill = createPill(priorityLabels[priority] || priority, `priority-pill priority-${priority}`);
@@ -169,7 +170,7 @@ function renderCalendar() {
     const cell = document.createElement("div"); cell.className = `calendar-day${date.getMonth() !== calendarCursor.getMonth() ? " outside" : ""}${key === today ? " today" : ""}${isHoliday(date) ? " holiday" : " weekday"}`;
     const number = document.createElement("button"); number.type = "button"; number.className = "day-number"; number.textContent = date.getDate(); number.title = "Создать задачу на эту дату"; number.ariaLabel = `Создать задачу на ${formatDate(key)}`; number.addEventListener("click", () => openTaskDialog(null, key)); cell.append(number);
     const dayTasks = tasks.filter((task) => dateKey(task.dueDate) === key);
-    dayTasks.slice(0, 3).forEach((task) => { const button = document.createElement("button"); button.type = "button"; button.className = `calendar-task${normalizeStatus(task.status, task.completed) === "completed" ? " done" : ""}`; button.textContent = task.title || "Без названия"; button.style.borderLeftColor = projectById(task.projectId)?.color || "#e9548d"; button.addEventListener("click", () => openTaskDialog(task)); cell.append(button); });
+    dayTasks.slice(0, 3).forEach((task) => { const button = document.createElement("button"); button.type = "button"; button.className = `calendar-task${normalizeStatus(task.status, task.completed) === "completed" ? " done" : ""}`; button.textContent = cleanTaskTitle(task.title); button.style.borderLeftColor = projectById(task.projectId)?.color || "#e9548d"; button.addEventListener("click", () => openTaskDialog(task)); cell.append(button); });
     if (dayTasks.length > 3) { const more = document.createElement("span"); more.className = "calendar-more"; more.textContent = `Ещё ${dayTasks.length - 3}`; cell.append(more); }
     cell.addEventListener("dblclick", (event) => { if (event.target === cell) openTaskDialog(null, key); }); grid.append(cell);
   }
@@ -178,7 +179,7 @@ function renderCalendar() {
 function openTaskDialog(task = null, dueDate = "") {
   taskForm.reset(); setError($("#task-form-error"));
   $("#task-dialog-title").textContent = task ? "Редактировать задачу" : "Новая задача";
-  $("#task-id").value = task?.id || ""; $("#task-title").value = task?.title || ""; $("#task-description").value = task?.description || "";
+  $("#task-id").value = task?.id || ""; $("#task-title").value = task ? cleanTaskTitle(task.title) : ""; $("#task-description").value = task?.description || "";
   $("#task-project").value = task?.projectId || ""; $("#task-due-date").value = task ? dateKey(task.dueDate) : dueDate; $("#task-priority").value = task?.priority || "medium";
   $("#task-status").value = normalizeStatus(task?.status, task?.completed); $("#task-minutes").value = task?.estimatedMinutes ?? "";
   taskDialog.showModal(); setTimeout(() => $("#task-title").focus(), 0);
@@ -201,7 +202,7 @@ async function duplicateTask(task) {
     const { id, createdAt, updatedAt, ...taskData } = task;
     await addDoc(collection(db, "users", currentUser.uid, "tasks"), {
       ...taskData,
-      title: task.title || "Без названия",
+      title: cleanTaskTitle(task.title),
       completed: false,
       status: "todo",
       createdAt: serverTimestamp(),
