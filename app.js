@@ -111,8 +111,11 @@ function filteredTasks() {
   const project = $("#project-filter").value;
   const status = $("#status-filter").value;
   return tasks.filter((task) => {
-    const matchesText = !search || `${task.title || ""} ${task.description || ""}`.toLocaleLowerCase("ru").includes(search);
-    return matchesText && (!project || task.projectId === project) && (!status || normalizeStatus(task.status, task.completed) === status);
+    const projectName = projectById(task.projectId)?.name || "без проекта";
+    const normalizedStatus = normalizeStatus(task.status, task.completed);
+    const searchableText = [task.title, task.description, projectName, priorityLabels[task.priority], statusLabels[normalizedStatus]].filter(Boolean).join(" ").toLocaleLowerCase("ru");
+    const matchesText = !search || searchableText.includes(search);
+    return matchesText && (!project || task.projectId === project) && (!status || normalizedStatus === status);
   });
 }
 
@@ -127,6 +130,7 @@ function iconButton(label, symbol, handler) { const button = document.createElem
 
 function renderTasks() {
   const visible = filteredTasks(); tasksList.replaceChildren();
+  $("#tasks-count").textContent = `${visible.length}`;
   if (!visible.length) { const empty = document.createElement("div"); empty.className = "empty-state"; empty.textContent = tasks.length ? "По выбранным фильтрам задач нет." : "Задач пока нет. Создайте первую задачу."; tasksList.append(empty); return; }
 
   visible.forEach((task) => {
@@ -139,7 +143,7 @@ function renderTasks() {
     const project = projectById(task.projectId); const projectPill = createPill(project?.name || "Без проекта", "project-pill"); if (project?.color) projectPill.style.borderLeft = `3px solid ${project.color}`;
     const priority = task.priority || "medium"; const priorityPill = createPill(priorityLabels[priority] || priority, `priority-pill priority-${priority}`);
     const statusPill = createPill(statusLabels[status], "status-pill"); const due = document.createElement("span"); due.className = "task-date"; due.textContent = formatDate(task.dueDate);
-    const actions = document.createElement("div"); actions.className = "row-actions"; actions.append(iconButton("Редактировать", "✎", () => openTaskDialog(task)), iconButton("Удалить", "×", () => removeTask(task)));
+    const actions = document.createElement("div"); actions.className = "row-actions"; actions.append(iconButton("Дублировать", "⧉", () => duplicateTask(task)), iconButton("Редактировать", "✎", () => openTaskDialog(task)), iconButton("Удалить", "×", () => removeTask(task)));
     row.append(checkbox, copy, projectPill, priorityPill, statusPill, due, actions); tasksList.append(row);
   });
 }
@@ -182,6 +186,24 @@ async function saveTask(event) {
 }
 
 async function toggleTask(task, completed) { try { await updateDoc(doc(db, "users", currentUser.uid, "tasks", task.id), { completed, status: completed ? "completed" : "todo", updatedAt: serverTimestamp() }); } catch { setDataMessage("Не удалось изменить задачу.", true); } }
+async function duplicateTask(task) {
+  if (!currentUser) return;
+  try {
+    const { id, createdAt, updatedAt, ...taskData } = task;
+    await addDoc(collection(db, "users", currentUser.uid, "tasks"), {
+      ...taskData,
+      title: `${task.title || "Без названия"} — копия`,
+      completed: false,
+      status: "todo",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    setDataMessage("Копия задачи создана.");
+    setTimeout(() => setDataMessage(""), 2200);
+  } catch {
+    setDataMessage("Не удалось дублировать задачу.", true);
+  }
+}
 async function removeTask(task) { if (!confirm(`Удалить задачу «${task.title || "Без названия"}»?`)) return; try { await deleteDoc(doc(db, "users", currentUser.uid, "tasks", task.id)); } catch { setDataMessage("Не удалось удалить задачу.", true); } }
 
 async function saveProject(event) {
