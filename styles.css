@@ -45,9 +45,14 @@ textarea { resize:vertical; } input:focus,select:focus,textarea:focus { border-c
 .empty-state { padding:48px 20px; color:var(--muted); text-align:center; }
 .calendar-scroll { overflow-x:auto; } .calendar-weekdays,.calendar-grid { min-width:770px; display:grid; grid-template-columns:repeat(7,minmax(105px,1fr)); }
 .calendar-weekdays span { padding:8px; color:var(--muted); font-size:12px; font-weight:750; text-align:center; }
-.calendar-day { min-height:130px; padding:9px; border-top:1px solid var(--line); border-right:1px solid var(--line); background:#fff; } .calendar-day:nth-child(7n+1) { border-left:1px solid var(--line); }
-.calendar-day.outside { background:#fafbfc; } .calendar-day.outside .day-number { color:#aeb5c1; } .calendar-day.today .day-number { color:#fff; background:var(--pink); }
-.day-number { display:grid; width:32px; height:32px; place-items:center; margin-bottom:7px; border-radius:50%; color:#27344b; font-family:Georgia,"Times New Roman",serif; font-size:17px; font-weight:700; }
+.calendar-grid { gap:8px; padding:2px; }
+.calendar-day { min-height:130px; padding:9px; border:1px solid #eadfca; border-radius:8px; background:#faf4e9; }
+.calendar-day.holiday { border-color:#d8e8a9; background:#f0f7d4; }
+.calendar-day.outside { opacity:.55; } .calendar-day.outside .day-number { color:#89909d; }
+.day-number { display:grid; width:34px; height:32px; place-items:center; margin:0 0 7px; padding:0; border:1px solid rgba(77,67,48,.14); border-radius:7px; color:#27344b; background:rgba(255,255,255,.7); font-family:Georgia,"Times New Roman",serif; font-size:17px; font-weight:700; }
+.day-number:hover { border-color:var(--pink); color:var(--pink-dark); background:#fff; }
+.calendar-day.today { border-color:var(--pink); box-shadow:0 0 0 2px rgba(233,84,141,.12); }
+.calendar-day.today .day-number { border-color:var(--pink); color:#fff; background:var(--pink); }
 .calendar-task { display:block; width:100%; margin:4px 0; padding:5px 6px; overflow:hidden; border:0; border-left:3px solid var(--pink); border-radius:4px; color:#354055; background:#f6f3f6; font-size:10px; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
 .calendar-task.done { opacity:.55; text-decoration:line-through; } .calendar-more { color:var(--muted); font-size:10px; }
 .modal { width:min(calc(100% - 28px),650px); max-height:90vh; padding:0; border:0; border-radius:8px; color:var(--ink); box-shadow:0 28px 80px rgba(28,36,55,.25); } .modal::backdrop { background:rgba(31,38,54,.38); backdrop-filter:blur(3px); }

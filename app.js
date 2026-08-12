@@ -62,6 +62,15 @@ function formatDate(value) {
   return date ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(date) : "Без срока";
 }
 
+function isHoliday(date) {
+  const fixedHolidays = new Set([
+    "01-01", "01-02", "01-03", "01-04", "01-05", "01-06", "01-07", "01-08",
+    "02-23", "03-08", "05-01", "05-09", "06-12", "11-04"
+  ]);
+  const monthDay = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return date.getDay() === 0 || date.getDay() === 6 || fixedHolidays.has(monthDay);
+}
+
 function showAuth() {
   currentUser = null;
   unsubscribeTasks?.(); unsubscribeProjects?.();
@@ -157,12 +166,12 @@ function renderCalendar() {
   const today = dateKey(new Date());
   for (let index = 0; index < 42; index += 1) {
     const date = new Date(start); date.setDate(start.getDate() + index); const key = dateKey(date);
-    const cell = document.createElement("div"); cell.className = `calendar-day${date.getMonth() !== calendarCursor.getMonth() ? " outside" : ""}${key === today ? " today" : ""}`;
-    const number = document.createElement("span"); number.className = "day-number"; number.textContent = date.getDate(); cell.append(number);
+    const cell = document.createElement("div"); cell.className = `calendar-day${date.getMonth() !== calendarCursor.getMonth() ? " outside" : ""}${key === today ? " today" : ""}${isHoliday(date) ? " holiday" : " weekday"}`;
+    const number = document.createElement("button"); number.type = "button"; number.className = "day-number"; number.textContent = date.getDate(); number.title = "Создать задачу на эту дату"; number.ariaLabel = `Создать задачу на ${formatDate(key)}`; number.addEventListener("click", () => openTaskDialog(null, key)); cell.append(number);
     const dayTasks = tasks.filter((task) => dateKey(task.dueDate) === key);
     dayTasks.slice(0, 3).forEach((task) => { const button = document.createElement("button"); button.type = "button"; button.className = `calendar-task${normalizeStatus(task.status, task.completed) === "completed" ? " done" : ""}`; button.textContent = task.title || "Без названия"; button.style.borderLeftColor = projectById(task.projectId)?.color || "#e9548d"; button.addEventListener("click", () => openTaskDialog(task)); cell.append(button); });
     if (dayTasks.length > 3) { const more = document.createElement("span"); more.className = "calendar-more"; more.textContent = `Ещё ${dayTasks.length - 3}`; cell.append(more); }
-    cell.addEventListener("dblclick", (event) => { if (event.target === cell || event.target === number) openTaskDialog(null, key); }); grid.append(cell);
+    cell.addEventListener("dblclick", (event) => { if (event.target === cell) openTaskDialog(null, key); }); grid.append(cell);
   }
 }
 
@@ -192,7 +201,7 @@ async function duplicateTask(task) {
     const { id, createdAt, updatedAt, ...taskData } = task;
     await addDoc(collection(db, "users", currentUser.uid, "tasks"), {
       ...taskData,
-      title: `${task.title || "Без названия"} — копия`,
+      title: task.title || "Без названия",
       completed: false,
       status: "todo",
       createdAt: serverTimestamp(),
