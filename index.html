@@ -32,8 +32,8 @@
       <aside class="sidebar">
         <a class="brand" href="./"><span class="brand-mark small">S</span><span>Smart<br>Task Tracker</span></a>
         <nav class="nav" aria-label="Основная навигация">
-          <button class="nav-button active" data-view="tasks" type="button"><span aria-hidden="true">✓</span>Задачи</button>
-          <button class="nav-button" data-view="calendar" type="button"><span aria-hidden="true">▦</span>Календарь</button>
+          <button class="nav-button active" data-view="calendar" type="button"><span aria-hidden="true">▦</span>Календарь</button>
+          <button class="nav-button" data-view="tasks" type="button"><span aria-hidden="true">✓</span>Задачи</button>
         </nav>
         <div class="sidebar-footer">
           <p id="user-email" class="user-email"></p>
@@ -61,7 +61,7 @@
 
           <p id="data-message" class="message data-message" role="status"></p>
 
-          <section id="tasks-view" class="view-section">
+          <section id="tasks-view" class="view-section" hidden>
             <div class="section-heading">
               <div><p class="eyebrow">Фокус</p><h2>Мои задачи <span id="tasks-count" class="tasks-count"></span></h2></div>
               <div class="filters">
@@ -72,7 +72,7 @@
             <div id="tasks-list" class="tasks-list" aria-live="polite"></div>
           </section>
 
-          <section id="calendar-view" class="view-section" hidden>
+          <section id="calendar-view" class="view-section">
             <div class="calendar-toolbar">
               <div><p class="eyebrow">Планировщик</p><h2 id="calendar-title"></h2></div>
               <div class="calendar-actions">
