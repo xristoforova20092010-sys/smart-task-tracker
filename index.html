@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7fb">
+  <meta name="description" content="Smart Task Tracker — просмотр задач из Firebase">
+  <title>Smart Task Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <section id="auth-view" class="auth-view" aria-labelledby="auth-title">
+      <div class="auth-panel">
+        <div class="brand-mark" aria-hidden="true">S</div>
+        <h1 id="auth-title">Smart Task Tracker</h1>
+        <p class="auth-subtitle">Войдите, чтобы увидеть свои задачи</p>
+
+        <form id="login-form" novalidate>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+
+          <label for="password">Пароль</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+          <p id="auth-error" class="message error-message" role="alert" hidden></p>
+          <button id="login-button" class="primary-button" type="submit">Войти</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="app-view" class="app-view" hidden>
+      <header class="app-header">
+        <div class="header-inner">
+          <a class="brand" href="./" aria-label="Smart Task Tracker — главная">
+            <span class="brand-mark small" aria-hidden="true">S</span>
+            <span>Smart Task Tracker</span>
+          </a>
+          <button id="logout-button" class="secondary-button" type="button">Выйти</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="page-heading">
+          <p class="eyebrow">Мои задачи</p>
+          <h1 id="greeting">Здравствуйте!</h1>
+          <p class="heading-note">Ваши текущие задачи из Smart Task Tracker</p>
+        </div>
+
+        <p id="data-message" class="message data-message" role="status">Загружаем задачи…</p>
+        <div id="tasks-list" class="tasks-grid" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
