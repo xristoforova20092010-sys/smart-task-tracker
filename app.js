@@ -1,237 +1,205 @@
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { auth, db } from "./firebase-config.js";
 
-const authView = document.querySelector("#auth-view");
-const appView = document.querySelector("#app-view");
-const loginForm = document.querySelector("#login-form");
-const loginButton = document.querySelector("#login-button");
-const authError = document.querySelector("#auth-error");
-const logoutButton = document.querySelector("#logout-button");
-const greeting = document.querySelector("#greeting");
-const dataMessage = document.querySelector("#data-message");
-const tasksList = document.querySelector("#tasks-list");
+const $ = (selector) => document.querySelector(selector);
+const authView = $("#auth-view");
+const appView = $("#app-view");
+const loginForm = $("#login-form");
+const authError = $("#auth-error");
+const dataMessage = $("#data-message");
+const tasksList = $("#tasks-list");
+const taskDialog = $("#task-dialog");
+const projectDialog = $("#project-dialog");
+const taskForm = $("#task-form");
+const projectForm = $("#project-form");
 
-const priorityLabels = {
-  high: "Высокий",
-  medium: "Средний",
-  low: "Низкий"
-};
+let currentUser = null;
+let tasks = [];
+let projects = [];
+let unsubscribeTasks = null;
+let unsubscribeProjects = null;
+let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-const statusLabels = {
-  todo: "К выполнению",
-  "to-do": "К выполнению",
-  pending: "К выполнению",
-  "in-progress": "В работе",
-  in_progress: "В работе",
-  done: "Завершено",
-  completed: "Завершено"
-};
+const priorityLabels = { high: "Высокий", medium: "Средний", low: "Низкий" };
+const statusLabels = { todo: "К выполнению", pending: "К выполнению", "to-do": "К выполнению", "in-progress": "В работе", in_progress: "В работе", completed: "Завершено", done: "Завершено" };
 
-function friendlyAuthError(error) {
-  const messages = {
+function authMessage(error) {
+  return ({
     "auth/invalid-credential": "Неверный email или пароль.",
-    "auth/user-not-found": "Пользователь с таким email не найден.",
-    "auth/wrong-password": "Неверный пароль.",
     "auth/invalid-email": "Проверьте правильность email.",
-    "auth/missing-password": "Введите пароль.",
-    "auth/too-many-requests": "Слишком много попыток входа. Попробуйте позже.",
-    "auth/network-request-failed": "Нет соединения с интернетом. Проверьте сеть и повторите попытку.",
-    "auth/operation-not-allowed": "Вход по email и паролю не включён в Firebase Authentication.",
-    "auth/unauthorized-domain": "Домен сайта не разрешён в настройках Firebase Authentication.",
-    "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "Firebase API key неверен или ограничен для этого сайта."
-  };
-
-  return messages[error.code] || "Не удалось войти. Проверьте данные и попробуйте ещё раз.";
+    "auth/too-many-requests": "Слишком много попыток. Попробуйте позже.",
+    "auth/network-request-failed": "Нет соединения с интернетом.",
+    "auth/unauthorized-domain": "Домен сайта не разрешён в Firebase Authentication."
+  })[error.code] || "Не удалось войти. Проверьте данные и повторите попытку.";
 }
 
-function setAuthError(message = "") {
-  authError.textContent = message;
-  authError.hidden = !message;
+function setError(element, message = "") { element.textContent = message; element.hidden = !message; }
+function setDataMessage(message = "", error = false) { dataMessage.textContent = message; dataMessage.hidden = !message; dataMessage.classList.toggle("error", error); }
+function projectById(id) { return projects.find((project) => project.id === id); }
+function normalizeStatus(status, completed) { if (completed || ["done", "completed"].includes(status)) return "completed"; if (["in-progress", "in_progress"].includes(status)) return "in-progress"; return "todo"; }
+
+function dateFromValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value === "object" && typeof value.seconds === "number") return new Date(value.seconds * 1000);
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function setDataMessage(message, isError = false) {
-  dataMessage.textContent = message;
-  dataMessage.hidden = !message;
-  dataMessage.classList.toggle("error", isError);
-}
-
-function showAuth() {
-  authView.hidden = false;
-  appView.hidden = true;
-  tasksList.replaceChildren();
-  loginForm.reset();
-  loginButton.disabled = false;
-  loginButton.textContent = "Войти";
-}
-
-function showApp() {
-  authView.hidden = true;
-  appView.hidden = false;
-}
-
-function formatLabel(value, labels) {
-  if (!value) return "Не указано";
-  const key = String(value).toLowerCase();
-  return labels[key] || String(value);
+function dateKey(value) {
+  const date = dateFromValue(value);
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatDate(value) {
-  if (!value) return "Не указан";
-
-  let date;
-  if (typeof value.toDate === "function") {
-    date = value.toDate();
-  } else if (typeof value === "object" && typeof value.seconds === "number") {
-    date = new Date(value.seconds * 1000);
-  } else {
-    date = new Date(value);
-  }
-
-  if (Number.isNaN(date.getTime())) return "Не указан";
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric"
-  }).format(date);
+  const date = dateFromValue(value);
+  return date ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric" }).format(date) : "Без срока";
 }
 
-function addDetail(list, label, value, className = "") {
-  const wrapper = document.createElement("div");
-  const term = document.createElement("dt");
-  const description = document.createElement("dd");
-  term.textContent = label;
-  description.textContent = value;
-  if (className) description.className = className;
-  wrapper.append(term, description);
-  list.append(wrapper);
+function showAuth() {
+  currentUser = null;
+  unsubscribeTasks?.(); unsubscribeProjects?.();
+  authView.hidden = false; appView.hidden = true;
+  loginForm.reset(); $("#login-button").disabled = false; $("#login-button").textContent = "Войти";
 }
 
-function renderTasks(tasks, projects) {
-  tasksList.replaceChildren();
+function showApp() { authView.hidden = true; appView.hidden = false; }
 
-  for (const task of tasks) {
-    const card = document.createElement("article");
-    card.className = `task-card${task.completed ? " completed" : ""}`;
-
-    const title = document.createElement("h2");
-    title.textContent = task.title || "Без названия";
-
-    const description = document.createElement("p");
-    description.className = "task-description";
-    description.textContent = task.description || "Описание не добавлено";
-
-    const details = document.createElement("dl");
-    details.className = "task-details";
-    addDetail(details, "Проект", projects.get(task.projectId) || "Без проекта");
-    addDetail(details, "Приоритет", formatLabel(task.priority, priorityLabels));
-    addDetail(details, "Статус", formatLabel(task.status, statusLabels));
-    addDetail(details, "Время", task.estimatedMinutes != null ? `${task.estimatedMinutes} мин.` : "Не указано");
-    addDetail(details, "Срок", formatDate(task.dueDate));
-    addDetail(details, "Выполнено", task.completed ? "Да" : "Нет", task.completed ? "completion" : "");
-
-    card.append(title, description, details);
-    tasksList.append(card);
-  }
-}
-
-async function loadUserData(user) {
-  setDataMessage("Загружаем задачи…");
-  tasksList.replaceChildren();
-
+async function loadProfile(user) {
   try {
-    const userRef = doc(db, "users", user.uid);
-    const projectsRef = collection(db, "users", user.uid, "projects");
-    const tasksRef = collection(db, "users", user.uid, "tasks");
-    const [profileSnapshot, projectsSnapshot, tasksSnapshot] = await Promise.all([
-      getDoc(userRef),
-      getDocs(projectsRef),
-      getDocs(tasksRef)
-    ]);
+    const snapshot = await getDoc(doc(db, "users", user.uid));
+    const profile = snapshot.exists() ? snapshot.data() : {};
+    const name = profile.displayName || user.displayName || user.email?.split("@")[0] || "пользователь";
+    $("#greeting").textContent = `Здравствуйте, ${name}!`;
+  } catch { $("#greeting").textContent = "Здравствуйте!"; }
+  $("#user-email").textContent = user.email || "";
+}
 
-    const profile = profileSnapshot.exists() ? profileSnapshot.data() : {};
-    const displayName = profile.displayName || user.displayName || user.email?.split("@")[0] || "пользователь";
-    greeting.textContent = `Здравствуйте, ${displayName}!`;
+function subscribeToData(user) {
+  setDataMessage("Загружаем ваши планы…");
+  unsubscribeProjects = onSnapshot(collection(db, "users", user.uid, "projects"), (snapshot) => {
+    projects = snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => !item.archived);
+    projects.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
+    updateProjectOptions(); renderAll();
+  }, () => setDataMessage("Не удалось загрузить проекты из Firestore.", true));
 
-    const projects = new Map();
-    projectsSnapshot.forEach((projectDoc) => {
-      projects.set(projectDoc.id, projectDoc.data().name || "Без названия");
-    });
+  unsubscribeTasks = onSnapshot(collection(db, "users", user.uid, "tasks"), (snapshot) => {
+    tasks = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    tasks.sort((a, b) => (dateFromValue(a.dueDate)?.getTime() || Infinity) - (dateFromValue(b.dueDate)?.getTime() || Infinity));
+    setDataMessage(""); renderAll();
+  }, () => setDataMessage("Не удалось загрузить задачи. Проверьте правила Firestore и соединение.", true));
+}
 
-    const tasks = tasksSnapshot.docs.map((taskDoc) => ({
-      id: taskDoc.id,
-      ...taskDoc.data()
-    }));
-
-    if (tasks.length === 0) {
-      setDataMessage("У вас пока нет задач.");
-      return;
-    }
-
-    renderTasks(tasks, projects);
-    setDataMessage("");
-  } catch (error) {
-    console.error("Не удалось загрузить данные Firestore:", error);
-    const isOffline = !navigator.onLine || error.code === "unavailable" || error.code === "firestore/unavailable";
-    setDataMessage(
-      isOffline
-        ? "Нет соединения с интернетом. Проверьте сеть и обновите страницу."
-        : "Не удалось получить данные из базы. Попробуйте обновить страницу позже.",
-      true
-    );
+function updateProjectOptions() {
+  for (const select of [$("#project-filter"), $("#task-project")]) {
+    const previous = select.value;
+    const first = select.id === "project-filter" ? "Все проекты" : "Без проекта";
+    select.replaceChildren(new Option(first, ""));
+    projects.forEach((project) => select.add(new Option(project.name || "Без названия", project.id)));
+    select.value = previous;
   }
 }
 
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setAuthError();
+function filteredTasks() {
+  const search = $("#search-input").value.trim().toLocaleLowerCase("ru");
+  const project = $("#project-filter").value;
+  const status = $("#status-filter").value;
+  return tasks.filter((task) => {
+    const matchesText = !search || `${task.title || ""} ${task.description || ""}`.toLocaleLowerCase("ru").includes(search);
+    return matchesText && (!project || task.projectId === project) && (!status || normalizeStatus(task.status, task.completed) === status);
+  });
+}
 
-  if (!loginForm.reportValidity()) return;
+function renderAll() {
+  const completed = tasks.filter((task) => normalizeStatus(task.status, task.completed) === "completed").length;
+  $("#welcome-summary").textContent = tasks.length ? `Всего задач: ${tasks.length}. Выполнено: ${completed}. Запланируйте следующий шаг.` : "Создайте первую задачу и начните планировать месяц.";
+  renderTasks(); renderCalendar();
+}
 
-  const email = loginForm.elements.email.value.trim();
-  const password = loginForm.elements.password.value;
-  loginButton.disabled = true;
-  loginButton.textContent = "Входим…";
+function createPill(text, className) { const span = document.createElement("span"); span.className = className; span.textContent = text; return span; }
+function iconButton(label, symbol, handler) { const button = document.createElement("button"); button.type = "button"; button.className = "icon-button"; button.ariaLabel = label; button.title = label; button.textContent = symbol; button.addEventListener("click", handler); return button; }
 
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (error) {
-    setAuthError(friendlyAuthError(error));
-    loginButton.disabled = false;
-    loginButton.textContent = "Войти";
+function renderTasks() {
+  const visible = filteredTasks(); tasksList.replaceChildren();
+  if (!visible.length) { const empty = document.createElement("div"); empty.className = "empty-state"; empty.textContent = tasks.length ? "По выбранным фильтрам задач нет." : "Задач пока нет. Создайте первую задачу."; tasksList.append(empty); return; }
+
+  visible.forEach((task) => {
+    const status = normalizeStatus(task.status, task.completed);
+    const row = document.createElement("article"); row.className = `task-row${status === "completed" ? " done" : ""}`;
+    const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.className = "task-check"; checkbox.checked = status === "completed"; checkbox.ariaLabel = `Отметить задачу «${task.title || "Без названия"}» выполненной`;
+    checkbox.addEventListener("change", () => toggleTask(task, checkbox.checked));
+    const copy = document.createElement("div"); const title = document.createElement("h3"); title.className = "task-title"; title.textContent = task.title || "Без названия";
+    const description = document.createElement("p"); description.className = "task-description"; description.textContent = task.description || "Описание не добавлено"; copy.append(title, description);
+    const project = projectById(task.projectId); const projectPill = createPill(project?.name || "Без проекта", "project-pill"); if (project?.color) projectPill.style.borderLeft = `3px solid ${project.color}`;
+    const priority = task.priority || "medium"; const priorityPill = createPill(priorityLabels[priority] || priority, `priority-pill priority-${priority}`);
+    const statusPill = createPill(statusLabels[status], "status-pill"); const due = document.createElement("span"); due.className = "task-date"; due.textContent = formatDate(task.dueDate);
+    const actions = document.createElement("div"); actions.className = "row-actions"; actions.append(iconButton("Редактировать", "✎", () => openTaskDialog(task)), iconButton("Удалить", "×", () => removeTask(task)));
+    row.append(checkbox, copy, projectPill, priorityPill, statusPill, due, actions); tasksList.append(row);
+  });
+}
+
+function renderCalendar() {
+  $("#calendar-title").textContent = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(calendarCursor);
+  const grid = $("#calendar-grid"); grid.replaceChildren();
+  const first = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first); start.setDate(first.getDate() - mondayOffset);
+  const today = dateKey(new Date());
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(start); date.setDate(start.getDate() + index); const key = dateKey(date);
+    const cell = document.createElement("div"); cell.className = `calendar-day${date.getMonth() !== calendarCursor.getMonth() ? " outside" : ""}${key === today ? " today" : ""}`;
+    const number = document.createElement("span"); number.className = "day-number"; number.textContent = date.getDate(); cell.append(number);
+    const dayTasks = tasks.filter((task) => dateKey(task.dueDate) === key);
+    dayTasks.slice(0, 3).forEach((task) => { const button = document.createElement("button"); button.type = "button"; button.className = `calendar-task${normalizeStatus(task.status, task.completed) === "completed" ? " done" : ""}`; button.textContent = task.title || "Без названия"; button.style.borderLeftColor = projectById(task.projectId)?.color || "#e9548d"; button.addEventListener("click", () => openTaskDialog(task)); cell.append(button); });
+    if (dayTasks.length > 3) { const more = document.createElement("span"); more.className = "calendar-more"; more.textContent = `Ещё ${dayTasks.length - 3}`; cell.append(more); }
+    cell.addEventListener("dblclick", (event) => { if (event.target === cell || event.target === number) openTaskDialog(null, key); }); grid.append(cell);
   }
-});
+}
 
-logoutButton.addEventListener("click", async () => {
-  logoutButton.disabled = true;
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error("Не удалось выйти:", error);
-    setDataMessage("Не удалось завершить сеанс. Проверьте соединение и повторите попытку.", true);
-  } finally {
-    logoutButton.disabled = false;
-  }
-});
+function openTaskDialog(task = null, dueDate = "") {
+  taskForm.reset(); setError($("#task-form-error"));
+  $("#task-dialog-title").textContent = task ? "Редактировать задачу" : "Новая задача";
+  $("#task-id").value = task?.id || ""; $("#task-title").value = task?.title || ""; $("#task-description").value = task?.description || "";
+  $("#task-project").value = task?.projectId || ""; $("#task-due-date").value = task ? dateKey(task.dueDate) : dueDate; $("#task-priority").value = task?.priority || "medium";
+  $("#task-status").value = normalizeStatus(task?.status, task?.completed); $("#task-minutes").value = task?.estimatedMinutes ?? "";
+  taskDialog.showModal(); setTimeout(() => $("#task-title").focus(), 0);
+}
 
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    showApp();
-    loadUserData(user);
-  } else {
-    showAuth();
-  }
-}, (error) => {
-  console.error("Ошибка инициализации Firebase Authentication:", error);
-  showAuth();
-  setAuthError(friendlyAuthError(error));
-});
+async function saveTask(event) {
+  event.preventDefault(); if (!taskForm.reportValidity() || !currentUser) return;
+  const button = $("#save-task-button"); button.disabled = true; setError($("#task-form-error"));
+  const status = $("#task-status").value; const dueDate = $("#task-due-date").value;
+  const payload = { title: $("#task-title").value.trim(), description: $("#task-description").value.trim(), projectId: $("#task-project").value || null, dueDate: dueDate || null, priority: $("#task-priority").value, status, completed: status === "completed", estimatedMinutes: $("#task-minutes").value === "" ? null : Number($("#task-minutes").value), updatedAt: serverTimestamp() };
+  try { const id = $("#task-id").value; if (id) await updateDoc(doc(db, "users", currentUser.uid, "tasks", id), payload); else await addDoc(collection(db, "users", currentUser.uid, "tasks"), { ...payload, createdAt: serverTimestamp() }); taskDialog.close(); }
+  catch (error) { console.error(error); setError($("#task-form-error"), "Не удалось сохранить задачу. Проверьте соединение и правила Firestore."); }
+  finally { button.disabled = false; }
+}
+
+async function toggleTask(task, completed) { try { await updateDoc(doc(db, "users", currentUser.uid, "tasks", task.id), { completed, status: completed ? "completed" : "todo", updatedAt: serverTimestamp() }); } catch { setDataMessage("Не удалось изменить задачу.", true); } }
+async function removeTask(task) { if (!confirm(`Удалить задачу «${task.title || "Без названия"}»?`)) return; try { await deleteDoc(doc(db, "users", currentUser.uid, "tasks", task.id)); } catch { setDataMessage("Не удалось удалить задачу.", true); } }
+
+async function saveProject(event) {
+  event.preventDefault(); if (!projectForm.reportValidity() || !currentUser) return; const button = $("#save-project-button"); button.disabled = true; setError($("#project-form-error"));
+  try { await addDoc(collection(db, "users", currentUser.uid, "projects"), { name: $("#project-name").value.trim(), color: $("#project-color").value, icon: "folder", archived: false, createdAt: serverTimestamp() }); projectDialog.close(); }
+  catch { setError($("#project-form-error"), "Не удалось создать проект."); } finally { button.disabled = false; }
+}
+
+loginForm.addEventListener("submit", async (event) => { event.preventDefault(); setError(authError); if (!loginForm.reportValidity()) return; const button = $("#login-button"); button.disabled = true; button.textContent = "Входим…"; try { await signInWithEmailAndPassword(auth, loginForm.elements.email.value.trim(), loginForm.elements.password.value); } catch (error) { setError(authError, authMessage(error)); button.disabled = false; button.textContent = "Войти"; } });
+$("#logout-button").addEventListener("click", () => signOut(auth)); taskForm.addEventListener("submit", saveTask); projectForm.addEventListener("submit", saveProject);
+[$("#new-task-button"), $("#welcome-new-task")].forEach((button) => button.addEventListener("click", () => openTaskDialog()));
+$("#new-project-button").addEventListener("click", () => { projectForm.reset(); $("#project-color").value = "#ef6a9a"; setError($("#project-form-error")); projectDialog.showModal(); });
+document.querySelectorAll(".close-dialog").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+document.querySelectorAll(".nav-button").forEach((button) => button.addEventListener("click", () => { document.querySelectorAll(".nav-button").forEach((item) => item.classList.remove("active")); button.classList.add("active"); $("#tasks-view").hidden = button.dataset.view !== "tasks"; $("#calendar-view").hidden = button.dataset.view !== "calendar"; appView.classList.remove("menu-open"); }));
+$("#menu-button").addEventListener("click", () => appView.classList.toggle("menu-open"));
+[$("#search-input"), $("#project-filter"), $("#status-filter")].forEach((element) => element.addEventListener(element.tagName === "INPUT" ? "input" : "change", renderTasks));
+$("#calendar-prev").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1); renderCalendar(); });
+$("#calendar-next").addEventListener("click", () => { calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1); renderCalendar(); });
+$("#calendar-today").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderCalendar(); });
+
+onAuthStateChanged(auth, (user) => { if (!user) { showAuth(); return; } currentUser = user; showApp(); loadProfile(user); subscribeToData(user); }, (error) => { showAuth(); setError(authError, authMessage(error)); });

@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#f5f7fb">
-  <meta name="description" content="Smart Task Tracker — просмотр задач из Firebase">
+  <meta name="theme-color" content="#f6f7fb">
   <title>Smart Task Tracker</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -14,44 +13,108 @@
       <div class="auth-panel">
         <div class="brand-mark" aria-hidden="true">S</div>
         <h1 id="auth-title">Smart Task Tracker</h1>
-        <p class="auth-subtitle">Войдите, чтобы увидеть свои задачи</p>
-
+        <p class="muted">Войдите, чтобы управлять своими планами</p>
         <form id="login-form" novalidate>
           <label for="email">Email</label>
           <input id="email" name="email" type="email" autocomplete="email" required>
-
           <label for="password">Пароль</label>
           <input id="password" name="password" type="password" autocomplete="current-password" required>
-
           <p id="auth-error" class="message error-message" role="alert" hidden></p>
-          <button id="login-button" class="primary-button" type="submit">Войти</button>
+          <button id="login-button" class="button primary full" type="submit">Войти</button>
         </form>
       </div>
     </section>
 
-    <section id="app-view" class="app-view" hidden>
-      <header class="app-header">
-        <div class="header-inner">
-          <a class="brand" href="./" aria-label="Smart Task Tracker — главная">
-            <span class="brand-mark small" aria-hidden="true">S</span>
-            <span>Smart Task Tracker</span>
-          </a>
-          <button id="logout-button" class="secondary-button" type="button">Выйти</button>
+    <section id="app-view" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="./"><span class="brand-mark small">S</span><span>Smart<br>Task Tracker</span></a>
+        <nav class="nav" aria-label="Основная навигация">
+          <button class="nav-button active" data-view="tasks" type="button"><span aria-hidden="true">✓</span>Задачи</button>
+          <button class="nav-button" data-view="calendar" type="button"><span aria-hidden="true">▦</span>Календарь</button>
+        </nav>
+        <div class="sidebar-footer">
+          <p id="user-email" class="user-email"></p>
+          <button id="logout-button" class="button secondary full" type="button">Выйти</button>
         </div>
-      </header>
+      </aside>
 
-      <div class="content">
-        <div class="page-heading">
-          <p class="eyebrow">Мои задачи</p>
-          <h1 id="greeting">Здравствуйте!</h1>
-          <p class="heading-note">Ваши текущие задачи из Smart Task Tracker</p>
+      <div class="workspace">
+        <header class="topbar">
+          <button id="menu-button" class="icon-button menu-button" type="button" aria-label="Открыть меню">☰</button>
+          <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search-input" type="search" placeholder="Поиск задач…" aria-label="Поиск задач"></div>
+          <button id="new-project-button" class="button secondary" type="button">Новый проект</button>
+          <button id="new-task-button" class="button primary" type="button">＋ Новая задача</button>
+        </header>
+
+        <div class="page-content">
+          <section class="welcome-band">
+            <div class="welcome-copy">
+              <p class="eyebrow">Ваше пространство</p>
+              <h1 id="greeting">Здравствуйте!</h1>
+              <p id="welcome-summary">Загружаем ваши планы…</p>
+              <button id="welcome-new-task" class="button primary" type="button">＋ Создать задачу</button>
+            </div>
+          </section>
+
+          <p id="data-message" class="message data-message" role="status"></p>
+
+          <section id="tasks-view" class="view-section">
+            <div class="section-heading">
+              <div><p class="eyebrow">Фокус</p><h2>Мои задачи</h2></div>
+              <div class="filters">
+                <select id="project-filter" aria-label="Фильтр по проекту"><option value="">Все проекты</option></select>
+                <select id="status-filter" aria-label="Фильтр по статусу"><option value="">Все статусы</option><option value="todo">К выполнению</option><option value="in-progress">В работе</option><option value="completed">Завершено</option></select>
+              </div>
+            </div>
+            <div id="tasks-list" class="tasks-list" aria-live="polite"></div>
+          </section>
+
+          <section id="calendar-view" class="view-section" hidden>
+            <div class="calendar-toolbar">
+              <div><p class="eyebrow">Планировщик</p><h2 id="calendar-title"></h2></div>
+              <div class="calendar-actions">
+                <button id="calendar-prev" class="icon-button" type="button" aria-label="Предыдущий месяц">‹</button>
+                <button id="calendar-today" class="button secondary" type="button">Сегодня</button>
+                <button id="calendar-next" class="icon-button" type="button" aria-label="Следующий месяц">›</button>
+              </div>
+            </div>
+            <div class="calendar-scroll">
+              <div class="calendar-weekdays" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+              <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+          </section>
         </div>
-
-        <p id="data-message" class="message data-message" role="status">Загружаем задачи…</p>
-        <div id="tasks-list" class="tasks-grid" aria-live="polite"></div>
       </div>
     </section>
   </main>
+
+  <dialog id="task-dialog" class="modal">
+    <form id="task-form" method="dialog">
+      <div class="modal-header"><div><p class="eyebrow">Планирование</p><h2 id="task-dialog-title">Новая задача</h2></div><button class="icon-button close-dialog" type="button" aria-label="Закрыть">×</button></div>
+      <input id="task-id" type="hidden">
+      <label for="task-title">Название</label><input id="task-title" maxlength="120" required>
+      <label for="task-description">Описание</label><textarea id="task-description" rows="3" maxlength="800"></textarea>
+      <div class="form-grid">
+        <div><label for="task-project">Проект</label><select id="task-project"><option value="">Без проекта</option></select></div>
+        <div><label for="task-due-date">Срок</label><input id="task-due-date" type="date"></div>
+        <div><label for="task-priority">Приоритет</label><select id="task-priority"><option value="low">Низкий</option><option value="medium" selected>Средний</option><option value="high">Высокий</option></select></div>
+        <div><label for="task-status">Статус</label><select id="task-status"><option value="todo">К выполнению</option><option value="in-progress">В работе</option><option value="completed">Завершено</option></select></div>
+        <div><label for="task-minutes">Время, минут</label><input id="task-minutes" type="number" min="0" max="14400" step="5"></div>
+      </div>
+      <p id="task-form-error" class="message error-message" hidden></p>
+      <div class="modal-actions"><button class="button secondary close-dialog" type="button">Отмена</button><button id="save-task-button" class="button primary" type="submit">Сохранить</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="project-dialog" class="modal small-modal">
+    <form id="project-form" method="dialog">
+      <div class="modal-header"><div><p class="eyebrow">Организация</p><h2>Новый проект</h2></div><button class="icon-button close-dialog" type="button" aria-label="Закрыть">×</button></div>
+      <label for="project-name">Название</label><input id="project-name" maxlength="80" required>
+      <label for="project-color">Цвет</label><input id="project-color" type="color" value="#ef6a9a">
+      <p id="project-form-error" class="message error-message" hidden></p>
+      <div class="modal-actions"><button class="button secondary close-dialog" type="button">Отмена</button><button id="save-project-button" class="button primary" type="submit">Создать</button></div>
+    </form>
+  </dialog>
 
   <script type="module" src="app.js"></script>
 </body>
