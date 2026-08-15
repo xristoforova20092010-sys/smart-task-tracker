@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f6f7fb">
   <title>Smart Task Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/app-icon-192.png">
+  <link rel="apple-touch-icon" href="assets/app-icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -37,6 +40,8 @@
         </nav>
         <div class="sidebar-footer">
           <p id="user-email" class="user-email"></p>
+          <button id="install-button" class="button floral-button full" type="button" hidden>Установить приложение</button>
+          <button id="account-button" class="button floral-button full" type="button">Учётная запись</button>
           <button id="logout-button" class="button floral-button full" type="button">Выйти</button>
         </div>
       </aside>
@@ -116,6 +121,21 @@
       <label for="project-color">Цвет</label><input id="project-color" type="color" value="#ef6a9a">
       <p id="project-form-error" class="message error-message" hidden></p>
       <div class="modal-actions"><button class="button secondary close-dialog" type="button">Отмена</button><button id="save-project-button" class="button primary" type="submit">Создать</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="account-dialog" class="modal small-modal">
+    <form id="account-form" method="dialog">
+      <div class="modal-header"><div><p class="eyebrow">Безопасность</p><h2>Учётная запись</h2></div><button class="icon-button close-dialog" type="button" aria-label="Закрыть">×</button></div>
+      <p class="account-note">Введите текущий пароль, затем новый email, новый пароль или оба значения.</p>
+      <label for="current-password">Текущий пароль</label>
+      <input id="current-password" type="password" autocomplete="current-password" required>
+      <label for="new-email">Новый email</label>
+      <input id="new-email" type="email" autocomplete="email" placeholder="Оставьте пустым, если менять не нужно">
+      <label for="new-password">Новый пароль</label>
+      <input id="new-password" type="password" autocomplete="new-password" minlength="6" placeholder="Не менее 6 символов">
+      <p id="account-form-message" class="message" role="status" hidden></p>
+      <div class="modal-actions"><button class="button secondary close-dialog" type="button">Отмена</button><button id="save-account-button" class="button primary" type="submit">Сохранить</button></div>
     </form>
   </dialog>
 

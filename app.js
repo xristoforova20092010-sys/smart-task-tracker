@@ -1,4 +1,4 @@
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signInWithEmailAndPassword, signOut, updatePassword, verifyBeforeUpdateEmail } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { auth, db } from "./firebase-config.js";
 
@@ -20,6 +20,7 @@ let projects = [];
 let unsubscribeTasks = null;
 let unsubscribeProjects = null;
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let installPrompt = null;
 
 const priorityLabels = { high: "Высокий", medium: "Средний", low: "Низкий" };
 const statusLabels = { todo: "К выполнению", pending: "К выполнению", "to-do": "К выполнению", "in-progress": "В работе", in_progress: "В работе", completed: "Завершено", done: "Завершено" };
@@ -35,6 +36,7 @@ function authMessage(error) {
 }
 
 function setError(element, message = "") { element.textContent = message; element.hidden = !message; }
+function setAccountMessage(message = "", error = false) { const element = $("#account-form-message"); element.textContent = message; element.hidden = !message; element.classList.toggle("error", error); }
 function setDataMessage(message = "", error = false) { dataMessage.textContent = message; dataMessage.hidden = !message; dataMessage.classList.toggle("error", error); }
 function projectById(id) { return projects.find((project) => project.id === id); }
 function normalizeStatus(status, completed) { if (completed || ["done", "completed"].includes(status)) return "completed"; if (["in-progress", "in_progress"].includes(status)) return "in-progress"; return "todo"; }
@@ -222,8 +224,44 @@ async function saveProject(event) {
   catch { setError($("#project-form-error"), "Не удалось создать проект."); } finally { button.disabled = false; }
 }
 
+async function saveAccount(event) {
+  event.preventDefault();
+  if (!currentUser || !currentUser.email || !$("#account-form").reportValidity()) return;
+  const currentPassword = $("#current-password").value;
+  const newEmail = $("#new-email").value.trim();
+  const newPassword = $("#new-password").value;
+  if (!newEmail && !newPassword) { setAccountMessage("Укажите новый email или новый пароль.", true); return; }
+
+  const button = $("#save-account-button"); button.disabled = true; setAccountMessage();
+  try {
+    const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+    await reauthenticateWithCredential(currentUser, credential);
+    if (newPassword) await updatePassword(currentUser, newPassword);
+    if (newEmail && newEmail !== currentUser.email) {
+      await verifyBeforeUpdateEmail(currentUser, newEmail);
+      setAccountMessage(`${newPassword ? "Пароль обновлён. " : ""}На новый email отправлена ссылка подтверждения.`);
+    } else {
+      setAccountMessage("Пароль успешно обновлён.");
+    }
+    $("#current-password").value = "";
+    $("#new-password").value = "";
+  } catch (error) {
+    const messages = {
+      "auth/invalid-credential": "Текущий пароль указан неверно.",
+      "auth/wrong-password": "Текущий пароль указан неверно.",
+      "auth/email-already-in-use": "Этот email уже используется другим аккаунтом.",
+      "auth/invalid-email": "Новый email указан неверно.",
+      "auth/weak-password": "Новый пароль должен содержать не менее 6 символов.",
+      "auth/network-request-failed": "Нет соединения с интернетом."
+    };
+    setAccountMessage(messages[error.code] || "Не удалось изменить учётные данные. Повторите попытку.", true);
+  } finally { button.disabled = false; }
+}
+
 loginForm.addEventListener("submit", async (event) => { event.preventDefault(); setError(authError); if (!loginForm.reportValidity()) return; const button = $("#login-button"); button.disabled = true; button.textContent = "Входим…"; try { await signInWithEmailAndPassword(auth, loginForm.elements.email.value.trim(), loginForm.elements.password.value); } catch (error) { setError(authError, authMessage(error)); button.disabled = false; button.textContent = "Войти"; } });
-$("#logout-button").addEventListener("click", () => signOut(auth)); taskForm.addEventListener("submit", saveTask); projectForm.addEventListener("submit", saveProject);
+$("#logout-button").addEventListener("click", () => signOut(auth)); taskForm.addEventListener("submit", saveTask); projectForm.addEventListener("submit", saveProject); $("#account-form").addEventListener("submit", saveAccount);
+$("#account-button").addEventListener("click", () => { $("#account-form").reset(); setAccountMessage(); $("#account-dialog").showModal(); });
+$("#install-button").addEventListener("click", async () => { if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $("#install-button").hidden = true; });
 [$("#new-task-button"), $("#welcome-new-task")].forEach((button) => button.addEventListener("click", () => openTaskDialog()));
 $("#new-project-button").addEventListener("click", () => { projectForm.reset(); $("#project-color").value = "#ef6a9a"; setError($("#project-form-error")); projectDialog.showModal(); });
 document.querySelectorAll(".close-dialog").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
@@ -235,3 +273,7 @@ $("#calendar-next").addEventListener("click", () => { calendarCursor = new Date(
 $("#calendar-today").addEventListener("click", () => { calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1); renderCalendar(); });
 
 onAuthStateChanged(auth, (user) => { if (!user) { showAuth(); return; } currentUser = user; showApp(); loadProfile(user); subscribeToData(user); }, (error) => { showAuth(); setError(authError, authMessage(error)); });
+
+window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); installPrompt = event; $("#install-button").hidden = false; });
+window.addEventListener("appinstalled", () => { installPrompt = null; $("#install-button").hidden = true; });
+if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch((error) => console.error("Не удалось зарегистрировать service worker:", error)));
